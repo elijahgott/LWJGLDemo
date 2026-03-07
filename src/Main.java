@@ -1,8 +1,13 @@
+import Utils.Timer;
 import org.lwjgl.*;
 import org.lwjgl.glfw.*;
 import org.lwjgl.opengl.*;
 import org.lwjgl.system.*;
 
+import java.awt.*;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.*;
 
 import static org.lwjgl.glfw.Callbacks.*;
@@ -12,154 +17,182 @@ import static org.lwjgl.system.MemoryStack.*;
 import static org.lwjgl.system.MemoryUtil.*;
 
 public class Main {
+    final static String windowTitle = "Title";
+    public long window;
 
-    // The window handle
-    private long window;
+    public int width = 640;
+    public int height = 480;
 
-    private float red = 1.0F;
-    private float green = 0.0F;
-    private float blue = 0.0F;
+    public float red = 0.0F;
+    public float green = 0.0F;
+    public float blue = 0.0F;
 
-    public void run() {
-        System.out.println("Hello LWJGL " + Version.getVersion() + "!");
+    public boolean running = false;
+    public Timer timer = new Timer();
 
-        init();
-        loop();
+    // fonts
+    private Font font;
 
-        // Free the window callbacks and destroy the window
-        glfwFreeCallbacks(window);
-        glfwDestroyWindow(window);
+    // CALLBACKS
+    private final GLFWErrorCallback errorCallback = GLFWErrorCallback.createPrint(System.err);
 
-        // Terminate GLFW and free the error callback
-        glfwTerminate();
-        glfwSetErrorCallback(null).free();
-    }
-
-    private void init() {
-        // Setup an error callback. The default implementation
-        // will print the error message in System.err.
-        GLFWErrorCallback.createPrint(System.err).set();
-
-        // Initialize GLFW. Most GLFW functions will not work before doing this.
-        if ( !glfwInit() ) {
-            throw new IllegalStateException("Unable to initialize GLFW");
-        }
-
-        // Configure GLFW
-        glfwDefaultWindowHints(); // optional, the current window hints are already the default
-        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); // the window will stay hidden after creation
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE); // the window will be resizable
-
-        // Create the window
-        window = glfwCreateWindow(400, 400, "Joe Byron", NULL, NULL);
-        if ( window == NULL )
-            throw new RuntimeException("Failed to create the GLFW window");
-
-        // Setup a key callback. It will be called every time a key is pressed, repeated or released.
-        glfwSetKeyCallback(window, (window, key, scancode, action, mods) -> {
-            // close window
-            if ( key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE ) {
-                glfwSetWindowShouldClose(window, true); // We will detect this in the rendering loop
+    private final GLFWKeyCallback keyCallback = new GLFWKeyCallback() {
+        @Override
+        public void invoke(long window, int key, int scancode, int action, int mods) {
+            if(key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE) {
+                glfwSetWindowShouldClose(window, true);
             }
-            // player inputs
             else {
-                // change red value
+                // change red
                 if (key == GLFW_KEY_Q) {
-                    red += 0.05F;
-                    if (red > 1.0F) {
+                    red += 0.01F;
+                    if (red >= 1.0F) {
                         red = 1.0F;
                     }
                 }
                 if (key == GLFW_KEY_A) {
-                    red -= 0.05F;
-                    if (red < 0.0F) {
+                    red -= 0.01F;
+                    if (red <= 0.0F) {
                         red = 0.0F;
                     }
                 }
-                // change green value
+
+                // change green
                 if (key == GLFW_KEY_W) {
-                    green += 0.05F;
-                    if (green > 1.0F) {
+                    green += 0.01F;
+                    if (green >= 1.0F) {
                         green = 1.0F;
                     }
                 }
                 if (key == GLFW_KEY_S) {
-                    green -= 0.05F;
-                    if (green < 0.0F) {
+                    green -= 0.01F;
+                    if (green <= 0.0F) {
                         green = 0.0F;
                     }
                 }
-                // change blue value
+
+                // change blue
                 if (key == GLFW_KEY_E) {
-                    blue += 0.05F;
-                    if (blue > 1.0F) {
+                    blue += 0.01F;
+                    if (blue >= 1.0F) {
                         blue = 1.0F;
                     }
                 }
                 if (key == GLFW_KEY_D) {
-                    blue -= 0.05F;
-                    if (blue < 0.0F) {
+                    blue -= 0.01F;
+                    if (blue <= 0.0F) {
                         blue = 0.0F;
                     }
                 }
             }
-        });
+        }
+    };
 
-        // Get the thread stack and push a new frame
-        try ( MemoryStack stack = stackPush() ) {
-            IntBuffer pWidth = stack.mallocInt(1); // int*
-            IntBuffer pHeight = stack.mallocInt(1); // int*
-
-            // Get the window size passed to glfwCreateWindow
-            glfwGetWindowSize(window, pWidth, pHeight);
-
-            // Get the resolution of the primary monitor
-            GLFWVidMode vidmode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-
-            // Center the window
-            glfwSetWindowPos(
-                    window,
-                    (vidmode.width() - pWidth.get(0)) / 2,
-                    (vidmode.height() - pHeight.get(0)) / 2
-            );
-        } // the stack frame is popped automatically
-
-        // Make the OpenGL context current
-        glfwMakeContextCurrent(window);
-        // Enable v-sync
-        glfwSwapInterval(1);
-
-        // Make the window visible
-        glfwShowWindow(window);
-    }
-
-    private void loop() {
-        // This line is critical for LWJGL's interoperation with GLFW's
-        // OpenGL context, or any context that is managed externally.
-        // LWJGL detects the context that is current in the current thread,
-        // creates the GLCapabilities instance and makes the OpenGL
-        // bindings available for use.
-        GL.createCapabilities();
-
-        // Run the rendering loop until the user has attempted to close
-        // the window or has pressed the ESCAPE key.
-        while ( !glfwWindowShouldClose(window) ) {
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear the framebuffer
-
-            // Set the clear color
-            // inside rendering loop because rgb values are updated with keys
-            glClearColor(red, green, blue, 0.0f);
-
-            glfwSwapBuffers(window); // swap the color buffers
-
-            // Poll for window events. The key callback above will only be
-            // invoked during this call.
-            glfwPollEvents();
+    public void startGame(){
+        init();
+        gameLoop();
+        if(!running){
+            dispose();
         }
     }
 
-    public static void main(String[] args) {
-        new Main().run();
+    public void gameLoop(){
+        GL.createCapabilities();
+
+        while(running){
+            // input();
+            // update();
+             render();
+
+//            sleep(sleepTime);
+        }
     }
 
+    public void render(){
+        float delta;
+
+        // RENDERING LOOP
+        while(!glfwWindowShouldClose(window)){
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            // swap buffers
+            // double buffers, one is shown on screen and one is the next frame
+            glfwSwapBuffers(window);
+            glfwSwapInterval(1);
+
+            glfwPollEvents();
+
+            delta = timer.getDelta();
+
+            // update(delta);
+            timer.updateUPS();
+
+            // render();
+            timer.updateFPS();
+
+            //update timer
+            timer.update();
+
+            glClearColor(red, green, blue, 1F);
+
+            // print FPS and UPS
+            System.out.println("FPS: " + timer.getFPS() + " --- UPS: " + timer.getUPS());
+        }
+
+        running = false;
+    }
+
+    public void init(){
+        // get fonts
+        try{
+            InputStream is = getClass().getResourceAsStream("/fonts/Silkscreen_Regular.ttf");
+            font = Font.createFont(Font.TRUETYPE_FONT, is);
+        }
+        catch (FontFormatException | IOException e){
+            System.err.println(e);
+        }
+
+        // initialize timer
+        timer.init();
+
+        // INITIALIZE WINDOW
+
+        // set error callback
+        glfwSetErrorCallback(errorCallback);
+
+        // initialize glfw
+        if(!glfwInit()){
+            throw new IllegalStateException("Unable to initialize GLFW");
+        }
+
+        // create window
+        window = glfwCreateWindow(width, height, windowTitle, NULL, NULL);
+        running = true;
+
+        if(window == NULL){
+            running = false;
+            glfwTerminate();
+            throw new RuntimeException("Failed to create the GLFW window");
+        }
+
+        // set key listener
+        glfwSetKeyCallback(window, keyCallback);
+
+        glfwMakeContextCurrent(window);
+        GL.createCapabilities();
+    }
+
+    public void dispose(){
+        // after window is terminated
+        glfwDestroyWindow(window);
+        keyCallback.free();
+
+        // after destroying window
+        glfwTerminate();
+        errorCallback.free();
+    }
+
+    public static void main(String[] args) {
+        new Main().startGame();
+    }
 }
