@@ -1,4 +1,4 @@
-package Utils;
+package utils;
 
 import static org.lwjgl.glfw.GLFW.glfwGetTime;
 
