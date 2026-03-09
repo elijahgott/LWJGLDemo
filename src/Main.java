@@ -1,3 +1,4 @@
+import org.lwjgl.system.MemoryStack;
 import utils.Timer;
 import org.lwjgl.glfw.*;
 import org.lwjgl.opengl.*;
@@ -6,6 +7,7 @@ import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.IntBuffer;
 import java.nio.file.Files;
 
 import static org.lwjgl.glfw.GLFW.*;
@@ -38,27 +40,33 @@ public class Main {
     int vbo;
 
     private static final float[] vertices = {
-            -0.5F, -0.5F, 0F,
-            0.5F, -0.5F, 0F,
-            0F, 0.5F, 0F
+            // positions         // colors
+            0.5f, -0.5f, 0.0f,  1.0f, 0.0f, 0.0f,  // bottom right
+            -0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,  // bottom left
+            0.0f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f   // top
     };
 
     // vertex shader
     String vertexShaderSource = "#version 330 core\n" +
             "layout (location = 0) in vec3 aPos;\n" +
+            "layout (location = 1) in vec3 aColor;\n" +
+            "\n" +
+            "out vec3 ourColor;\n" +
             "\n" +
             "void main()\n" +
             "{\n" +
-            "    gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n" +
+            "    gl_Position = vec4(aPos, 1.0F);\n" +
+            "    ourColor = aColor;\n" +
             "}\0";
 
     // fragment shader
     String fragmentShaderSource = "#version 330 core\n" +
             "out vec4 FragColor;\n" +
+            "in vec3 ourColor;\n" +
             "\n" +
             "void main()\n" +
             "{\n" +
-            "    FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n" +
+            "    FragColor = vec4(ourColor, 1.0F);\n" +
             "}\0";
 
     public boolean running = false;
@@ -96,6 +104,15 @@ public class Main {
 
             // use shader program
             glUseProgram(shaderProgram);
+
+            // UNIFORM (GLOBAL)
+//            // change triangle color over time
+//            double timeValue = glfwGetTime();
+//            double colorValue = (Math.sin(timeValue) / 2.0) + 0.5;
+//            int vertexColorLocation = glGetUniformLocation(shaderProgram, "ourColor");
+//            glUniform4f(vertexColorLocation, 0.0F, (float)colorValue, 0.0F, 1.0F);
+
+            // render triangle
             glBindVertexArray(vao);
             glDrawArrays(GL_TRIANGLES, 0, 3);
 
@@ -166,18 +183,20 @@ public class Main {
         glViewport(0, 0, width, height);
 
 //        System.out.println("OpenGL Version: " + glGetString(GL_VERSION));
+
         // SHADERS !!!
 
         // vertex array object
         vao = glGenVertexArrays();
         // vertex buffer object
         vbo = glGenBuffers();
+
         setUpVertexData(vao, vbo);
 
         // VERTEX SHADER
-        vertexShader = glCreateShader(GL_VERTEX_SHADER);
+        final int vertexShader = createShader(GL_VERTEX_SHADER, vertexShaderSource);
         // FRAGMENT SHADER
-        fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+        final int fragmentShader = createShader(GL_FRAGMENT_SHADER, fragmentShaderSource);
         // SHADER PROGRAM
         shaderProgram = glCreateProgram();
 
@@ -198,17 +217,11 @@ public class Main {
         glDeleteShader(vertexShader);
         glDeleteShader(fragmentShader);
 
-        // LINKING VERTEX ATTRIBUTES
-        glVertexAttribPointer(0, 3, GL_FLOAT, false, 3 * Float.SIZE, 0);
-        glEnableVertexAttribArray(0);
-
         // unbind VAO
         glBindVertexArray(0);
     }
 
     public void dispose(){
-
-
         glDeleteVertexArrays(1);
         glDeleteBuffers(1);
         glDeleteProgram(shaderProgram);
@@ -285,6 +298,26 @@ public class Main {
         }
     };
 
+    private static int createShader(int type, String shaderSource) {
+        final int shader = glCreateShader(type);
+
+        glShaderSource(shader, shaderSource);
+        glCompileShader(shader);
+
+        try(MemoryStack stack = MemoryStack.stackPush()) {
+            IntBuffer success = stack.mallocInt(1);
+
+            glGetShaderiv(shader, GL_COMPILE_STATUS, success);
+
+            if(success.get(0) == GL_FALSE){
+                final String infoLog = glGetShaderInfoLog(shader);
+                System.err.println("Shader compilation failed: " + infoLog);
+            }
+        }
+
+        return shader;
+    }
+
     private static void setUpVertexData(int vao, int vbo) {
         // Bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
         glBindVertexArray(vao);
@@ -292,8 +325,13 @@ public class Main {
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
         glBufferData(GL_ARRAY_BUFFER, vertices, GL_STATIC_DRAW);
 
-        glVertexAttribPointer(0, 3, GL_FLOAT, false, 3 * Float.BYTES, NULL);
+        // position attribute
+        glVertexAttribPointer(0, 3, GL_FLOAT, false, 6 * Float.BYTES, NULL);
         glEnableVertexAttribArray(0);
+
+        // color attribute
+        glVertexAttribPointer(1, 3, GL_FLOAT, false, 6 * Float.BYTES, 3 * Float.BYTES);
+        glEnableVertexAttribArray(1);
 
         // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
         glBindBuffer(GL_ARRAY_BUFFER, 0);
