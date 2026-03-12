@@ -78,10 +78,11 @@ public class Main {
             "\n" +
             "// texture sampler\n" +
             "uniform sampler2D texture1;\n" +
+            "uniform sampler2D texture2;\n" +
             "\n" +
             "void main()\n" +
             "{\n" +
-            "    FragColor = texture(texture1, texCoord);\n" +
+            "    FragColor = mix(texture(texture1, texCoord), texture(texture2, texCoord), 0.5);\n" +
             "}";
 
     // load texture
@@ -89,7 +90,6 @@ public class Main {
     int texture2;
 
     public boolean running = false;
-    public Timer timer = new Timer();
 
     public void startGame(){
         init();
@@ -112,63 +112,7 @@ public class Main {
         }
     }
 
-    public void render(){
-        float delta;
-
-        // RENDER LOOP
-        while(!glfwWindowShouldClose(window)){
-            glfwPollEvents();
-
-            // clear screen so it can be redrawn
-            glClearColor(red, green, blue, 1F);
-            glClear(GL_COLOR_BUFFER_BIT);
-
-            // bind texture
-            glBindTexture(GL_TEXTURE_2D, texture1);
-
-            // use shader program
-            glUseProgram(shaderProgram);
-
-            // UNIFORM (GLOBAL)
-//            // change triangle color over time
-//            double timeValue = glfwGetTime();
-//            double colorValue = (Math.sin(timeValue) / 2.0) + 0.5;
-//            int vertexColorLocation = glGetUniformLocation(shaderProgram, "ourColor");
-//            glUniform4f(vertexColorLocation, 0.0F, (float)colorValue, 0.0F, 1.0F);
-
-            // render triangle
-            glBindVertexArray(vao);
-            glDrawArrays(GL_TRIANGLES, 0, 3);
-//            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0); // this crashes my program??
-
-            // swap buffers
-            // double buffers, one is shown on screen and one is the next frame
-            glfwSwapBuffers(window);
-            glfwSwapInterval(1);
-
-
-            delta = timer.getDelta();
-
-            // update(delta);
-            timer.updateUPS();
-
-            // render();
-            timer.updateFPS();
-
-            //update timer
-            timer.update();
-
-            // print FPS and UPS
-//            System.out.println("FPS: " + timer.getFPS() + " --- UPS: " + timer.getUPS());
-        }
-
-        running = false;
-    }
-
     public void init(){
-        // initialize timer
-        timer.init();
-
         // INITIALIZE WINDOW
 
         // set error callback
@@ -210,6 +154,7 @@ public class Main {
 
         // TEXTURES !!
         texture1 = loadTexture("res/textures/elo.jpg");
+        texture2 = loadTexture("res/textures/goggins.jpg");
 
         // SHADERS !!!
 
@@ -248,6 +193,52 @@ public class Main {
 
         // unbind VAO
         glBindVertexArray(0);
+    }
+
+    public void render(){
+        // RENDER LOOP
+        while(!glfwWindowShouldClose(window)){
+            glfwPollEvents();
+
+            // clear screen so it can be redrawn
+            glClearColor(red, green, blue, 1F);
+            glClear(GL_COLOR_BUFFER_BIT);
+
+            // bind texture
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, texture1);
+
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, texture2);
+
+            int text1loc = glGetUniformLocation(shaderProgram, "texture1");
+            glUniform1i(text1loc, 0);
+
+            int text2loc = glGetUniformLocation(shaderProgram, "texture2");
+            glUniform1i(text2loc, 1);
+
+            // use shader program
+            glUseProgram(shaderProgram);
+
+            // UNIFORM (GLOBAL)
+//            // change triangle color over time
+//            double timeValue = glfwGetTime();
+//            double colorValue = (Math.sin(timeValue) / 2.0) + 0.5;
+//            int vertexColorLocation = glGetUniformLocation(shaderProgram, "ourColor");
+//            glUniform4f(vertexColorLocation, 0.0F, (float)colorValue, 0.0F, 1.0F);
+
+            // render triangle
+            glBindVertexArray(vao);
+//            glDrawArrays(GL_TRIANGLES, 0, 3);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0); // this crashes my program??
+
+            // swap buffers
+            // double buffers, one is shown on screen and one is the next frame
+            glfwSwapBuffers(window);
+            glfwSwapInterval(1);
+        }
+
+        running = false;
     }
 
     public void dispose(){
@@ -368,7 +359,7 @@ public class Main {
         glVertexAttribPointer(2, 2, GL_FLOAT, false, 8 * Float.BYTES, 6 * Float.BYTES);
         glEnableVertexAttribArray(2);
 
-        glBindBuffer(GL_ARRAY_BUFFER, ebo);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices, GL_STATIC_DRAW);
 
         // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
