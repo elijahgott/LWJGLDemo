@@ -4,13 +4,19 @@ import org.lwjgl.glfw.*;
 import org.lwjgl.opengl.*;
 
 import java.awt.*;
+import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
+// LWJGL
 import static org.lwjgl.stb.STBImage.*;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.ARBVertexArrayObject.*;
 
+// OpenGL
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL15C.GL_ARRAY_BUFFER;
 import static org.lwjgl.opengl.GL15C.GL_STATIC_DRAW;
@@ -20,6 +26,10 @@ import static org.lwjgl.opengl.GL15C.glGenBuffers;
 import static org.lwjgl.opengl.GL20.*;
 import static org.lwjgl.opengl.GL30.glGenerateMipmap;
 import static org.lwjgl.system.MemoryUtil.*;
+
+// GLM - openGL Math
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 public class Main {
     final static String windowTitle = "Title";
@@ -41,11 +51,11 @@ public class Main {
     int ebo;
 
     private static final float[] vertices = {
-            // positions          // colors           // texture coords
-            0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f, // top right
-            0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, // bottom right
-            -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f, // bottom left
-            -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f  // top left
+            // positions        // texture coords
+            0.5f,  0.5f, 0.0f,  1.0f, 1.0f, // top right
+            0.5f, -0.5f, 0.0f,  1.0f, 0.0f, // bottom right
+            -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, // bottom left
+            -0.5f,  0.5f, 0.0f, 0.0f, 1.0f  // top left
     };
 
     private static final int[] indices = {
@@ -53,39 +63,11 @@ public class Main {
             1, 2, 3 // second triangle
     };
 
-    // vertex shader
-    String vertexShaderSource = "#version 330 core\n" +
-            "layout (location = 0) in vec3 aPos;\n" +
-            "layout (location = 1) in vec3 aColor;\n" +
-            "layout (location = 2) in vec2 aTexCoord;\n" +
-            "\n" +
-            "out vec3 ourColor;\n" +
-            "out vec2 texCoord;\n" +
-            "\n" +
-            "void main()\n" +
-            "{\n" +
-            "    gl_Position = vec4(aPos, 1.0F);\n" +
-            "    ourColor = aColor;\n" +
-            "    texCoord = vec2(aTexCoord.x, aTexCoord.y);\n" +
-            "}";
+    // shader sources
+    String vertexShaderSource = "";
+    String fragmentShaderSource = "";
 
-    // fragment shader
-    String fragmentShaderSource = "#version 330 core\n" +
-            "out vec4 FragColor;\n" +
-            "\n" +
-            "in vec3 ourColor;\n" +
-            "in vec2 texCoord;\n" +
-            "\n" +
-            "// texture sampler\n" +
-            "uniform sampler2D texture1;\n" +
-            "uniform sampler2D texture2;\n" +
-            "\n" +
-            "void main()\n" +
-            "{\n" +
-            "    FragColor = mix(texture(texture1, texCoord), texture(texture2, texCoord), 0.5);\n" +
-            "}";
-
-    // load texture
+    // textures
     int texture1;
     int texture2;
 
@@ -114,7 +96,6 @@ public class Main {
 
     public void init(){
         // INITIALIZE WINDOW
-
         // set error callback
         glfwSetErrorCallback(errorCallback);
 
@@ -157,12 +138,27 @@ public class Main {
         texture2 = loadTexture("res/textures/goggins.jpg");
 
         // SHADERS !!!
+        // get fragment shaders from file
+        try{
+            fragmentShaderSource = Files.readString(Path.of("src/shaders/fragmentShader.txt"));
+        }
+        catch (IOException e){
+            e.printStackTrace();
+        }
+
+        // get vertex shaders from file
+        try{
+            vertexShaderSource = Files.readString(Path.of("src/shaders/vertexShader.txt"));
+        }
+        catch (IOException e){
+            e.printStackTrace();
+        }
 
         // vertex array object
         vao = glGenVertexArrays();
         // vertex buffer object
         vbo = glGenBuffers();
-        // ebo??
+        // element buffer object
         ebo = glGenBuffers();
 
         setUpVertexData(vao, vbo, ebo);
@@ -217,20 +213,31 @@ public class Main {
             int text2loc = glGetUniformLocation(shaderProgram, "texture2");
             glUniform1i(text2loc, 1);
 
+            // create transformations
+            Matrix4f transform = new Matrix4f(); // identity matrix
+            // rotating before translating seems to make it rotate around a specific point (0, 0?)
+            transform.rotate((float)glfwGetTime(), new Vector3f(0.0F, 0.0F, 1.0F).normalize()); // rotate
+            transform.translate(-0.5F, -0.5F, 0.0F); // shift left and down
+            transform.scale((float)Math.sin(glfwGetTime()), (float)Math.sin(glfwGetTime()) + 0.5F, (float)Math.sin(glfwGetTime())); // shrink, sin makes this trippy
+            // JOML needs rotation vector to be normalized
+
+
             // use shader program
             glUseProgram(shaderProgram);
+            final int transformLocation = glGetUniformLocation(shaderProgram, "transform");
 
-            // UNIFORM (GLOBAL)
-//            // change triangle color over time
-//            double timeValue = glfwGetTime();
-//            double colorValue = (Math.sin(timeValue) / 2.0) + 0.5;
-//            int vertexColorLocation = glGetUniformLocation(shaderProgram, "ourColor");
-//            glUniform4f(vertexColorLocation, 0.0F, (float)colorValue, 0.0F, 1.0F);
+            try(MemoryStack stack = MemoryStack.stackPush()) {
+                FloatBuffer transformData = stack.mallocFloat(16);
+                // LWJGL needs data in array/buffer form,
+                // so we have to fill a buffer with matrix data
+                transform.get(transformData);
+                glUniformMatrix4fv(transformLocation, false, transformData);
+            }
 
-            // render triangle
+            // RENDER FROM OBJECT
             glBindVertexArray(vao);
-//            glDrawArrays(GL_TRIANGLES, 0, 3);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0); // this crashes my program??
+//            glDrawArrays(GL_TRIANGLES, 0, 3); // renders triangle
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
             // swap buffers
             // double buffers, one is shown on screen and one is the next frame
@@ -348,16 +355,16 @@ public class Main {
         glBufferData(GL_ARRAY_BUFFER, vertices, GL_STATIC_DRAW);
 
         // position attribute
-        glVertexAttribPointer(0, 3, GL_FLOAT, false, 8 * Float.BYTES, NULL);
+        glVertexAttribPointer(0, 3, GL_FLOAT, false, 5 * Float.BYTES, 0);
         glEnableVertexAttribArray(0);
 
-        // color attribute
-        glVertexAttribPointer(1, 3, GL_FLOAT, false, 8 * Float.BYTES, 3 * Float.BYTES);
-        glEnableVertexAttribArray(1);
+        // color attribute -- NOT IN SHADER RN
+//        glVertexAttribPointer(1, 3, GL_FLOAT, false, 8 * Float.BYTES, 3 * Float.BYTES);
+//        glEnableVertexAttribArray(1);
 
         // texture attribute
-        glVertexAttribPointer(2, 2, GL_FLOAT, false, 8 * Float.BYTES, 6 * Float.BYTES);
-        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(1, 2, GL_FLOAT, false, 5 * Float.BYTES, 3 * Float.BYTES);
+        glEnableVertexAttribArray(1);
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices, GL_STATIC_DRAW);
