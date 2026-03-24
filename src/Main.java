@@ -52,15 +52,59 @@ public class Main {
 
     private static final float[] vertices = {
             // positions        // texture coords
-            0.5f,  0.5f, 0.0f,  1.0f, 1.0f, // top right
-            0.5f, -0.5f, 0.0f,  1.0f, 0.0f, // bottom right
-            -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, // bottom left
-            -0.5f,  0.5f, 0.0f, 0.0f, 1.0f  // top left
+            -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+            0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
+            0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+            0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+            -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
+            -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+
+            -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+            0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+            0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
+            0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
+            -0.5f,  0.5f,  0.5f,  0.0f, 1.0f,
+            -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+
+            -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+            -0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+            -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+            -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+            -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+            -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+
+            0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+            0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+            0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+            0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+            0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+            0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+
+            -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+            0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
+            0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+            0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+            -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+            -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+
+            -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
+            0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+            0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+            0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+            -0.5f,  0.5f,  0.5f,  0.0f, 0.0f,
+            -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
     };
 
     private static final int[] indices = {
             0, 1, 3, // first triangle
             1, 2, 3 // second triangle
+    };
+
+    private static final Vector3f[] cubePositons = new Vector3f[] {
+            new Vector3f(-1.5f, -0.5f, -0.5f),
+            new Vector3f(-0.5f, 0.5f, -1.0f),
+            new Vector3f(0.5f, -0.5f, -0.5f),
+            new Vector3f(0.75f, 0.5f, 0.0f),
     };
 
     // shader sources
@@ -192,13 +236,19 @@ public class Main {
     }
 
     public void render(){
+        // use shader program
+        glUseProgram(shaderProgram);
+
+        // enable depth test for z index
+        glEnable(GL_DEPTH_TEST);
+
         // RENDER LOOP
         while(!glfwWindowShouldClose(window)){
             glfwPollEvents();
 
             // clear screen so it can be redrawn
             glClearColor(red, green, blue, 1F);
-            glClear(GL_COLOR_BUFFER_BIT);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             // bind texture
             glActiveTexture(GL_TEXTURE0);
@@ -213,31 +263,44 @@ public class Main {
             int text2loc = glGetUniformLocation(shaderProgram, "texture2");
             glUniform1i(text2loc, 1);
 
-            // create transformations
-            Matrix4f transform = new Matrix4f(); // identity matrix
-            // rotating before translating seems to make it rotate around a specific point (0, 0?)
-            transform.rotate((float)glfwGetTime(), new Vector3f(0.0F, 0.0F, 1.0F).normalize()); // rotate
-            transform.translate(-0.5F, -0.5F, 0.0F); // shift left and down
-            transform.scale((float)Math.sin(glfwGetTime()), (float)Math.sin(glfwGetTime()) + 0.5F, (float)Math.sin(glfwGetTime())); // shrink, sin makes this trippy
-            // JOML needs rotation vector to be normalized
+            // model, view, and projection matrices
+            Matrix4f model = new Matrix4f();
+            Matrix4f view = new Matrix4f();
+            Matrix4f projection = new Matrix4f();
 
+            model.rotate((float)glfwGetTime() * (float)Math.toRadians(-50.0), new Vector3f(0.5F, 0.5F, 0.5F).normalize());
+            view.translate(0.0F, 0.0F, -3.0F); // slide camera back
+            projection.perspective((float)Math.toRadians(45.0), (float)width/(float)height, 0.1F, 100.0F);
 
-            // use shader program
-            glUseProgram(shaderProgram);
-            final int transformLocation = glGetUniformLocation(shaderProgram, "transform");
+            // matrix uniforms
+            int modelLocation = glGetUniformLocation(shaderProgram, "model");
+            int viewLocation = glGetUniformLocation(shaderProgram, "view");
+            int projectionLocation = glGetUniformLocation(shaderProgram, "projection");
 
             try(MemoryStack stack = MemoryStack.stackPush()) {
-                FloatBuffer transformData = stack.mallocFloat(16);
-                // LWJGL needs data in array/buffer form,
-                // so we have to fill a buffer with matrix data
-                transform.get(transformData);
-                glUniformMatrix4fv(transformLocation, false, transformData);
+                FloatBuffer fb = stack.mallocFloat(16);
+
+                glUniformMatrix4fv(modelLocation, false, model.get(fb));
+                glUniformMatrix4fv(viewLocation, false, view.get(fb));
+                glUniformMatrix4fv(projectionLocation, false, projection.get(fb));
             }
 
-            // RENDER FROM OBJECT
+            // RENDER CONTAINER
             glBindVertexArray(vao);
-//            glDrawArrays(GL_TRIANGLES, 0, 3); // renders triangle
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+            for(int i = 0; i < cubePositons.length; i++){
+                model = new Matrix4f();
+                model.translate(cubePositons[i]);
+                float angle = 20.0F * i;
+                model.rotate((float)glfwGetTime() * (float)Math.toRadians(angle), new Vector3f(0.5F, 0.5F, 0.5F));
+                try(MemoryStack stack = MemoryStack.stackPush()) {
+                    FloatBuffer fb = stack.mallocFloat(16);
+
+                    glUniformMatrix4fv(modelLocation, false, model.get(fb));
+                }
+
+                glDrawArrays(GL_TRIANGLES, 0, 36);
+            }
 
             // swap buffers
             // double buffers, one is shown on screen and one is the next frame
