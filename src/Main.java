@@ -35,12 +35,11 @@ public class Main {
     final static String windowTitle = "Title";
     public long window;
 
-    public int width = 640;
-    public int height = 480;
+    public static int width = 640;
+    public static int height = 480;
 
-    float red = 0.0F;
-    float green = 0.0F;
-    float blue = 0.0F;
+    float deltaTime = 0.0f;
+    float lastFrame = 0.0f;
 
     int shaderProgram;
     int vertexShader;
@@ -49,6 +48,18 @@ public class Main {
     int vao;
     int vbo;
     int ebo;
+
+    public static Vector3f cameraPos = new Vector3f(0.0f, 0.0f, 3.0f);
+    public static Vector3f cameraFront = new Vector3f(0.0f, 0.0f, -1.0f);
+    public static Vector3f cameraUp = new Vector3f(0.0f, 1.0f, 0.0f);
+
+    // mouse camera
+    private static boolean firstMouseInput = true;
+    private static float yaw = -90.0f;
+    private static float pitch = 0.0f;
+    private static float lastX = (float)width / 2.0f;
+    private static float lastY = (float)height / 2.0f;
+    private static float fov = 45.0f;
 
     private static final float[] vertices = {
             // positions        // texture coords
@@ -161,6 +172,7 @@ public class Main {
             glfwTerminate();
             throw new RuntimeException("Failed to create the GLFW window");
         }
+
         // set resize listener
         glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
 
@@ -168,6 +180,11 @@ public class Main {
         glfwSetKeyCallback(window, keyCallback);
 
         glfwMakeContextCurrent(window);
+
+        glfwSetCursorPosCallback(window, mouseMoveCallback);
+       glfwSetScrollCallback(window, scrollCallback);
+
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
         // initialize openGL (?)
         GL.createCapabilities();
@@ -242,12 +259,19 @@ public class Main {
         // enable depth test for z index
         glEnable(GL_DEPTH_TEST);
 
+        Vector3f vecDst = new Vector3f();
+
         // RENDER LOOP
         while(!glfwWindowShouldClose(window)){
+            // calculate delta time
+            float currentFrame = (float)glfwGetTime();
+            deltaTime = currentFrame - lastFrame;
+            lastFrame = currentFrame;
+
             glfwPollEvents();
 
             // clear screen so it can be redrawn
-            glClearColor(red, green, blue, 1F);
+            glClearColor(0.0f, 0.0f, 0.0f, 1F);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             // bind texture
@@ -265,12 +289,15 @@ public class Main {
 
             // model, view, and projection matrices
             Matrix4f model = new Matrix4f();
-            Matrix4f view = new Matrix4f();
+
+            // rotate camera
+            Matrix4f view = new Matrix4f().lookAt(cameraPos, cameraPos.add(cameraFront, vecDst), cameraUp);
+
             Matrix4f projection = new Matrix4f();
 
             model.rotate((float)glfwGetTime() * (float)Math.toRadians(-50.0), new Vector3f(0.5F, 0.5F, 0.5F).normalize());
             view.translate(0.0F, 0.0F, -3.0F); // slide camera back
-            projection.perspective((float)Math.toRadians(45.0), (float)width/(float)height, 0.1F, 100.0F);
+            projection.perspective(fov, (float)width/(float)height, 0.1F, 100.0F);
 
             // matrix uniforms
             int modelLocation = glGetUniformLocation(shaderProgram, "model");
@@ -337,47 +364,28 @@ public class Main {
                 glfwSetWindowShouldClose(window, true);
             }
             else {
-                float stepSize = 0.05F;
-                // change red
-                if (key == GLFW_KEY_Q) {
-                    red += stepSize;
-                    if (red >= 1.0F) {
-                        red = 1.0F;
-                    }
-                }
-                if (key == GLFW_KEY_A) {
-                    red -= stepSize;
-                    if (red <= 0.0F) {
-                        red = 0.0F;
-                    }
+                float cameraSpeed = 2.5f * deltaTime;
+
+                if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){
+                    cameraSpeed *= 4.0f;
                 }
 
-                // change green
-                if (key == GLFW_KEY_W) {
-                    green += stepSize;
-                    if (green >= 1.0F) {
-                        green = 1.0F;
-                    }
-                }
-                if (key == GLFW_KEY_S) {
-                    green -= stepSize;
-                    if (green <= 0.0F) {
-                        green = 0.0F;
-                    }
+                if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
+                    cameraPos.add(cameraFront.mul(cameraSpeed, new Vector3f()));
                 }
 
-                // change blue
-                if (key == GLFW_KEY_E) {
-                    blue += stepSize;
-                    if (blue >= 1.0F) {
-                        blue = 1.0F;
-                    }
+                if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS){
+                    cameraPos.sub(cameraFront.mul(cameraSpeed, new Vector3f()));
                 }
-                if (key == GLFW_KEY_D) {
-                    blue -= stepSize;
-                    if (blue <= 0.0F) {
-                        blue = 0.0F;
-                    }
+
+                if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS){
+                    final Vector3f pos = cameraFront.cross(cameraUp, new Vector3f()).normalize();
+                    cameraPos.sub(pos.mul(cameraSpeed));
+                }
+
+                if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS){
+                    final Vector3f pos = cameraFront.cross(cameraUp, new Vector3f()).normalize();
+                    cameraPos.add(pos.mul(cameraSpeed));
                 }
             }
         }
@@ -387,6 +395,59 @@ public class Main {
         @Override
         public void invoke(long window, int width, int height) {
             glViewport(0, 0, width, height);
+        }
+    };
+
+    private static final GLFWCursorPosCallback mouseMoveCallback = new GLFWCursorPosCallback() {
+        @Override
+        public void invoke(long window, double xpos, double ypos) {
+            if(firstMouseInput){
+                lastX = (float)xpos;
+                lastY = (float)ypos;
+                firstMouseInput = false;
+            }
+
+            float xoffset = (float)xpos - lastX;
+            float yoffset = lastY - (float)ypos;
+            lastX = (float)xpos;
+            lastY = (float)ypos;
+
+            final float sensitivity = 0.1f;
+            xoffset *= sensitivity;
+            yoffset *= sensitivity;
+
+            yaw += xoffset;
+            pitch += yoffset;
+
+            if(pitch > 89.0f){
+                pitch = 89.0f;
+            }
+            else if(pitch < -89.0f){
+                pitch = -89.0f;
+            }
+
+            Vector3f front = new Vector3f();
+            front.x = (float)Math.cos(Math.toRadians(yaw)) * (float)Math.toRadians(pitch);
+            front.y = (float)Math.sin(Math.toRadians(pitch));
+            front.z = (float)Math.sin(Math.toRadians(yaw)) * (float)Math.toRadians(pitch);
+
+            cameraFront = front.normalize();
+        }
+    };
+
+    private static final GLFWScrollCallback scrollCallback = new GLFWScrollCallback() {
+        @Override
+        public void invoke(long window, double xoffset, double yoffset) {
+            if(fov >= 1.0f && fov <= 45.0f){
+                fov -= (float)yoffset;
+            }
+
+            if(fov < 1.0f){
+                fov = 1.0f;
+            }
+            else if(fov > 45.0f){
+                fov = 45.0f;
+            }
         }
     };
 
